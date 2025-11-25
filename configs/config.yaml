@@ -1,0 +1,66 @@
+# Configuration for Chinese Herbal Classification
+# Based on parameters from the research paper
+
+data:
+  dataset_path: "data/herbal"  # Path to downloaded dataset
+  image_size: 224
+  num_classes: 100  # Adjust based on actual dataset
+  train_split: 0.7
+  val_split: 0.2
+  test_split: 0.1
+  num_workers: 4
+
+preprocessing:
+  # Normalization
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  # Denoising
+  median_filter_kernel: 5
+  
+augmentation:
+  # Data augmentation techniques
+  rotation_degrees: 30
+  horizontal_flip: true
+  vertical_flip: true
+  random_crop: true
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+
+model:
+  name: "ConvNeXt-Tiny-ACMix"
+  backbone: "convnext_tiny"
+  num_acmix_blocks: 2  # K=2 in paper (best performance)
+  network_width: 768
+  num_layers: 22  # Best depth from paper
+  activation: "gelu"
+  drop_path_rate: 0.1
+  pretrained: true
+
+training:
+  epochs: 100
+  batch_size: 32
+  learning_rate: 0.0002
+  optimizer: "adamw"
+  weight_decay: 0.05
+  scheduler: "cosine"
+  warmup_epochs: 5
+  label_smoothing: 0.1
+  
+  # Mixed precision training
+  use_amp: true
+  
+  # Checkpointing
+  save_freq: 10
+  early_stopping_patience: 15
+
+hardware:
+  device: "cuda"
+  gpu_id: 0
+  seed: 42
+
+paths:
+  checkpoint_dir: "checkpoints"
+  results_dir: "results"
+  log_dir: "logs"
