@@ -61,6 +61,10 @@ class Trainer:
         self.use_amp = config['training'].get('use_amp', True)
         self.scaler = GradScaler() if self.use_amp else None
         
+        # Create directories
+        os.makedirs(config['paths']['checkpoint_dir'], exist_ok=True)
+        os.makedirs(config['paths']['log_dir'], exist_ok=True)
+        
         # Tensorboard
         self.writer = SummaryWriter(log_dir=config['paths']['log_dir'])
         
@@ -68,9 +72,6 @@ class Trainer:
         self.start_epoch = 0
         self.best_acc = 0.0
         self.patience_counter = 0
-        
-        # Create checkpoint directory
-        os.makedirs(config['paths']['checkpoint_dir'], exist_ok=True)
     
     def _create_optimizer(self):
         """Create optimizer based on config"""

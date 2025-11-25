@@ -4,9 +4,13 @@ Supports training, evaluation, and inference
 """
 
 import os
+import warnings
 import argparse
 import yaml
 import torch
+
+# Suppress specific warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='timm')
 
 from train import Trainer
 from evaluate import Evaluator

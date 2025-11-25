@@ -30,11 +30,21 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 # Install other dependencies
 echo ""
 echo "Step 4: Installing other dependencies..."
-pip install timm albumentations scikit-learn pandas opencv-python matplotlib seaborn pyyaml tensorboard tqdm
+pip install timm scikit-learn pandas pyyaml tqdm
+
+# Install data augmentation and visualization
+echo ""
+echo "Step 5: Installing albumentations and visualization tools..."
+pip install albumentations opencv-python matplotlib seaborn
+
+# Install TensorBoard for logging
+echo ""
+echo "Step 6: Installing TensorBoard..."
+pip install tensorboard
 
 # Install additional packages
 echo ""
-echo "Step 5: Installing additional packages..."
+echo "Step 7: Installing additional packages..."
 pip install kagglehub
 
 echo ""

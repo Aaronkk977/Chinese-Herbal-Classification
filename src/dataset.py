@@ -128,6 +128,13 @@ def create_dataloaders(config):
     """Create train, validation, and test dataloaders"""
     
     data_path = config['data']['dataset_path']
+    
+    # Convert to absolute path if relative
+    if not os.path.isabs(data_path):
+        # Get the project root directory (parent of src/)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_path = os.path.join(project_root, data_path)
+    
     batch_size = config['training']['batch_size']
     num_workers = config['data']['num_workers']
     
@@ -146,12 +153,19 @@ def create_dataloaders(config):
         config=config
     )
     
-    test_dataset = HerbalDataset(
-        root_dir=data_path,
-        split='test',
-        transform=get_val_transforms(config),
-        config=config
-    )
+    # Check if test split exists, otherwise use val for testing
+    test_split_path = os.path.join(data_path, 'test')
+    if os.path.exists(test_split_path):
+        test_dataset = HerbalDataset(
+            root_dir=data_path,
+            split='test',
+            transform=get_val_transforms(config),
+            config=config
+        )
+    else:
+        # Use validation set as test set if test split doesn't exist
+        print("Warning: Test split not found, using validation set for testing")
+        test_dataset = val_dataset
     
     # Create dataloaders
     train_loader = DataLoader(

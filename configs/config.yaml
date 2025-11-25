@@ -2,9 +2,9 @@
 # Based on parameters from the research paper
 
 data:
-  dataset_path: "data/herbal"  # Path to downloaded dataset
+  dataset_path: "data_split"  # Path to properly split dataset (train/val/test)
   image_size: 224
-  num_classes: 100  # Adjust based on actual dataset
+  num_classes: 100  # Will be auto-detected from dataset
   train_split: 0.7
   val_split: 0.2
   test_split: 0.1

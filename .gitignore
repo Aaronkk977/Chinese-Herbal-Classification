@@ -1,4 +1,74 @@
+# Dataset directories
 dataset/
-archive.zip
-*.pdf
 data/
+data_split/
+
+# Compressed files
+archive.zip
+*.zip
+herbaldata.zip
+
+# Documents
+*.pdf
+
+# Model checkpoints
+checkpoints/
+*.pth
+*.ckpt
+
+# Logs and results
+logs/
+results/
+*.log
+split_log.txt
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Kaggle cache
+~/.cache/kagglehub/
+/tmp2/*/kagglehub/
