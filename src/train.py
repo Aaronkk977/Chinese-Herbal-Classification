@@ -59,7 +59,7 @@ class Trainer:
         
         # Mixed precision training
         self.use_amp = config['training'].get('use_amp', True)
-        self.scaler = GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
         
         # Create directories
         os.makedirs(config['paths']['checkpoint_dir'], exist_ok=True)
