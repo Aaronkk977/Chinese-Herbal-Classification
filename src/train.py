@@ -14,7 +14,7 @@ import yaml
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
@@ -127,7 +127,7 @@ class Trainer:
             
             # Forward pass with mixed precision
             if self.use_amp:
-                with autocast():
+                with autocast(device_type='cuda'):
                     outputs = self.model(images)
                     loss = self.criterion(outputs, labels)
                 

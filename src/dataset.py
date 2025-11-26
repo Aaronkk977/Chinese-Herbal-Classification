@@ -71,6 +71,11 @@ class HerbalDataset(Dataset):
         
         # Read image
         image = cv2.imread(img_path)
+        
+        if image is None:
+            print(f"[READ FAILED] Cannot find or read image: {img_path}")
+            raise ValueError(f"Image not found at {img_path}")
+        
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
         # Apply median filtering for denoising (as per paper)
