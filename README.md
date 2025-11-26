@@ -61,43 +61,112 @@ conda activate herbal
 
 2. **Install dependencies:**
 
+Option 1 - Use automated setup script (recommended):
+
+```bash
+bash setup.sh
+```
+
+Option 2 - Manual installation:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-Or install specific packages:
+Option 3 - Install specific packages:
 
 ```bash
 # PyTorch with CUDA 12.4
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# Other dependencies
-pip install timm albumentations scikit-learn pandas opencv-python matplotlib seaborn pyyaml tensorboard tqdm
+# Core dependencies (REQUIRED)
+pip install timm albumentations scikit-learn pandas pyyaml tensorboard tqdm
+
+# Computer vision libraries
+pip install opencv-python matplotlib seaborn
+```
+
+**Common Installation Issues:**
+
+If you encounter `ModuleNotFoundError`, install missing packages:
+
+```bash
+# Missing tensorboard
+pip install tensorboard
+
+# Missing albumentations
+pip install albumentations
+
+# Missing other packages
+pip install <package-name>
 ```
 
 ### Dataset Preparation
 
-1. **Download dataset:**
+**Important:** For proper academic evaluation following the paper's methodology, the dataset must be split into train/val/test sets.
+
+#### Step 1: Download Dataset
+
+Download the Chinese herbal medicine dataset from Kaggle:
 
 ```bash
 python download_data.py
 ```
 
-2. **Organize dataset structure:**
+This will download and extract the dataset to:
+- `data/train/` - Original training images
+- `data/val/` - Original validation images
+- 100 classes of Chinese herbs
+- Approximately 100+ images per class
+
+#### Step 2: Split Dataset (REQUIRED for proper evaluation)
+
+To avoid data leakage and follow academic standards, re-split the dataset into proper train/val/test sets (70%/20%/10%):
+
+```bash
+python split_dataset.py --source data --output data_split
+```
+
+This will:
+- ✅ Merge all images from `data/train/` and `data/val/`
+- ✅ Randomly shuffle all images
+- ✅ Split into 70% train / 20% val / 10% test
+- ✅ Create new directory structure in `data_split/`
+
+**Why this is important:**
+- **Train set (70%)**: Used for model training
+- **Val set (20%)**: Used for hyperparameter tuning and model selection during training
+- **Test set (10%)**: **Completely untouched** until final evaluation - prevents data leakage
+
+#### Step 3: Dataset Structure After Splitting
 
 ```
-data/herbal/
-├── train/
-│   ├── class1/
-│   │   ├── image1.jpg
-│   │   └── ...
-│   ├── class2/
+data_split/
+├── train/          # Training set (70%)
+│   ├── Anxixiang/
+│   ├── Baibiandou/
+│   ├── ...
+│   └── Zirantong/  # 100 herb classes
+├── val/            # Validation set (20%)
+│   ├── Anxixiang/
 │   └── ...
-├── val/
-│   └── ...
-└── test/
+└── test/           # Test set (10%) - DO NOT TOUCH until final evaluation
+    ├── Anxixiang/
     └── ...
 ```
+
+**Custom Split Ratios:**
+
+```bash
+# Custom ratios (must sum to 1.0)
+python split_dataset.py --source data --output data_split \
+    --train-ratio 0.8 --val-ratio 0.15 --test-ratio 0.05
+
+# Set random seed for reproducibility
+python split_dataset.py --source data --output data_split --seed 42
+```
+
+**Note:** Both `data/` and `data_split/` directories are git-ignored.
 
 ## 🎓 Training
 
@@ -107,6 +176,32 @@ data/herbal/
 cd src
 python main.py --mode train --config ../configs/config.yaml
 ```
+
+### GPU Selection
+
+```bash
+# Use default GPU (GPU 0)
+python main.py --mode train --config ../configs/config.yaml
+
+# Use specific GPU (e.g., GPU 1)
+python main.py --mode train --config ../configs/config.yaml --gpu-id 1
+
+# Use GPU 2
+python main.py --mode train --config ../configs/config.yaml --gpu-id 2
+```
+
+**First Time Setup:**
+
+Before training, ensure you have:
+1. ✅ Installed all dependencies (`bash setup.sh` or `pip install -r requirements.txt`)
+2. ✅ Downloaded the dataset (`python download_data.py`)
+3. ✅ **Split the dataset** (`python split_dataset.py --source data --output data_split`)
+4. ✅ Activated the conda environment (`conda activate herbal`)
+
+The training script will automatically create necessary directories:
+- `checkpoints/` - Saved model checkpoints
+- `logs/` - TensorBoard training logs  
+- `results/` - Evaluation results and metrics
 
 ### Advanced Training Options
 
@@ -128,6 +223,7 @@ python main.py --mode train --config ../configs/custom_config.yaml
 - **ACMix Blocks**: 2 (K=2)
 - **Network Depth**: 22 layers
 - **Activation**: GELU
+- **Dataset Split**: 70% train / 20% val / 10% test
 
 ## 📊 Evaluation
 

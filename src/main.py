@@ -95,12 +95,20 @@ def main():
                         help='Path to image for inference')
     parser.add_argument('--resume', type=str, default=None,
                         help='Path to checkpoint to resume training')
+    parser.add_argument('--gpu-id', type=int, default=None,
+                        help='GPU ID to use (e.g., 0, 1, 2). Overrides config file.')
     
     args = parser.parse_args()
     
     # Load configuration
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
+    
+    # Override config with command line arguments
+    if args.gpu_id is not None:
+        config['hardware']['gpu_id'] = args.gpu_id
+        # Set CUDA_VISIBLE_DEVICES environment variable
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     
     print(f"\nRunning in {args.mode} mode...")
     print(f"Configuration: {args.config}")

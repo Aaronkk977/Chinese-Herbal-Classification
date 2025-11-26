@@ -56,8 +56,8 @@ training:
   early_stopping_patience: 15
 
 hardware:
-  device: "cuda"
-  gpu_id: 0
+  device: "cuda"  # Always use GPU
+  gpu_id: 0       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
   seed: 42
 
 paths:
