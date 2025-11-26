@@ -76,29 +76,12 @@ pip install -r requirements.txt
 Option 3 - Install specific packages:
 
 ```bash
-# PyTorch with CUDA 12.4
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# Install all dependencies from requirements.txt
+pip install -r requirements.txt
 
-# Core dependencies (REQUIRED)
-pip install timm albumentations scikit-learn pandas pyyaml tensorboard tqdm
-
-# Computer vision libraries
-pip install opencv-python matplotlib seaborn
-```
-
-**Common Installation Issues:**
-
-If you encounter `ModuleNotFoundError`, install missing packages:
-
-```bash
-# Missing tensorboard
-pip install tensorboard
-
-# Missing albumentations
-pip install albumentations
-
-# Missing other packages
-pip install <package-name>
+# Optional: if your GPU uses CUDA 12.4, install matching PyTorch wheels
+# (only if not already pinned in requirements.txt)
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
 ### Dataset Preparation

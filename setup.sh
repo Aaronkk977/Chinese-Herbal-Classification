@@ -6,8 +6,13 @@ echo "=========================================="
 echo "Chinese Herbal Classification Quick Start"
 echo "=========================================="
 
-# Check if conda is available
-if ! command -v conda &> /dev/null; then
+# Locate conda: prefer PATH, fallback to $HOME/miniconda3
+if command -v conda &> /dev/null; then
+    CONDA_CMD=$(command -v conda)
+elif [ -x "$HOME/miniconda3/bin/conda" ]; then
+    CONDA_CMD="$HOME/miniconda3/bin/conda"
+    export PATH="$HOME/miniconda3/bin:$PATH"
+else
     echo "Error: conda not found. Please install Miniconda first."
     exit 1
 fi
@@ -15,37 +20,37 @@ fi
 # Create conda environment
 echo ""
 echo "Step 1: Creating conda environment..."
-conda create -y -n herbal python=3.10
+# Ensure Conda Terms of Service are accepted for default channels (non-interactive)
+echo "Checking and accepting Conda Terms of Service if required..."
+"$CONDA_CMD" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main || true
+"$CONDA_CMD" tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r || true
 
-# Activate environment
-echo ""
-echo "Step 2: Activating environment..."
-source activate herbal
+"$CONDA_CMD" create -y -n herbal python=3.10
 
-# Install PyTorch with CUDA
-echo ""
-echo "Step 3: Installing PyTorch with CUDA support..."
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# Exit if environment creation failed
+if [ $? -ne 0 ]; then
+    echo "Failed to create conda environment 'herbal'. Please check the conda output above."
+    exit 1
+fi
 
-# Install other dependencies
+# Use `conda run` to execute installs inside the new environment (avoids activation issues)
 echo ""
-echo "Step 4: Installing other dependencies..."
-pip install timm scikit-learn pandas pyyaml tqdm
+echo "Step 2: Installing packages into 'herbal' environment using 'conda run'..."
 
-# Install data augmentation and visualization
-echo ""
-echo "Step 5: Installing albumentations and visualization tools..."
-pip install albumentations opencv-python matplotlib seaborn
+echo "Installing PyTorch with CUDA support..."
+"$CONDA_CMD" run -n herbal pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 
-# Install TensorBoard for logging
-echo ""
-echo "Step 6: Installing TensorBoard..."
-pip install tensorboard
+echo "Installing core dependencies..."
+"$CONDA_CMD" run -n herbal pip install timm scikit-learn pandas pyyaml tqdm
 
-# Install additional packages
-echo ""
-echo "Step 7: Installing additional packages..."
-pip install kagglehub
+echo "Installing data augmentation and visualization tools..."
+"$CONDA_CMD" run -n herbal pip install albumentations opencv-python matplotlib seaborn
+
+echo "Installing TensorBoard..."
+"$CONDA_CMD" run -n herbal pip install tensorboard
+
+echo "Installing additional packages..."
+"$CONDA_CMD" run -n herbal pip install kagglehub || true
 
 echo ""
 echo "=========================================="

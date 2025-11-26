@@ -127,6 +127,8 @@ def merge_and_split(train_dir, val_dir, output_dir, train_ratio=0.7, val_ratio=0
     
     # Merge images from both train and val
     for class_name in class_dirs:
+
+        print("Merging class:", class_name)
         merged_class_dir = os.path.join(temp_merged, class_name)
         os.makedirs(merged_class_dir, exist_ok=True)
         
