@@ -11,10 +11,14 @@ data:
   num_workers: 0
 
 preprocessing:
-  # Normalization
+  # Normalization (ImageNet statistics for pretrained models)
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
-  # Denoising
+  # Grayscale conversion (as per paper: weighted average method)
+  # Helps reduce ad/watermark noise by focusing on texture instead of color
+  # Output is still 3-channel (R=G=B) for pretrained model compatibility
+  use_grayscale: true
+  # Denoising with median filter (kernel must be odd integer >= 3)
   median_filter_kernel: 5
   
 augmentation:
@@ -57,7 +61,7 @@ training:
 
 hardware:
   device: "cuda"  # Always use GPU
-  gpu_id: 0       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
+  gpu_id: 2       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
   seed: 42
 
 paths:

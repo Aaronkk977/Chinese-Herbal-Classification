@@ -63,28 +63,14 @@ for class_dir in tqdm(train_dir.iterdir(), desc="Train"):
             shutil.rmtree(dst)
         shutil.copytree(class_dir, dst)
 
-# Split validation data into val (50%) and test (50%)
-print("  Splitting validation data into val/test...")
-for class_dir in tqdm(val_dir.iterdir(), desc="Val/Test"):
+# Copy validation data as-is (do NOT split val into val/test)
+print("  Copying validation data (no splitting)...")
+for class_dir in tqdm(val_dir.iterdir(), desc="Val"):
     if class_dir.is_dir():
-        class_name = class_dir.name
-        images = list(class_dir.glob("*.jpg")) + list(class_dir.glob("*.png"))
-        random.shuffle(images)
-        
-        # Split 50-50
-        mid = len(images) // 2
-        val_images = images[:mid]
-        test_images = images[mid:]
-        
-        # Create class directories
-        (data_root / "val" / class_name).mkdir(exist_ok=True)
-        (data_root / "test" / class_name).mkdir(exist_ok=True)
-        
-        # Copy images
-        for img in val_images:
-            shutil.copy2(img, data_root / "val" / class_name / img.name)
-        for img in test_images:
-            shutil.copy2(img, data_root / "test" / class_name / img.name)
+        dst = data_root / "val" / class_dir.name
+        if dst.exists():
+            shutil.rmtree(dst)
+        shutil.copytree(class_dir, dst)
 
 print("\n[4/4] Verifying dataset structure...")
 for split in ['train', 'val', 'test']:

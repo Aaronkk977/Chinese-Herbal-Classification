@@ -17,6 +17,15 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
+import warnings
+
+# Suppress PIL decompression bomb warning for large images
+warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
+
+# Global set to track already-logged corrupt files (avoid spamming logs)
+_logged_corrupt_files = set()
+# Log file path for corrupt images
+_corrupt_log_path = None
 
 
 class HerbalDataset(Dataset):
@@ -66,22 +75,87 @@ class HerbalDataset(Dataset):
     def __len__(self):
         return len(self.samples)
     
+    def _log_corrupt_file(self, img_path, reason):
+        """Log corrupt file path to a log file and optionally delete it"""
+        global _logged_corrupt_files, _corrupt_log_path
+        
+        if img_path in _logged_corrupt_files:
+            return  # Already logged
+        
+        _logged_corrupt_files.add(img_path)
+        
+        # Initialize log path if not set
+        if _corrupt_log_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            _corrupt_log_path = os.path.join(project_root, 'corrupt_images.log')
+        
+        # Log to file
+        with open(_corrupt_log_path, 'a') as f:
+            f.write(f"{img_path} | {reason}\n")
+        
+        print(f"[CORRUPT] {reason}: {img_path}")
+        
+        # Optional: uncomment below to auto-delete corrupt files
+        # try:
+        #     os.remove(img_path)
+        #     print(f"[DELETED] {img_path}")
+        # except Exception as e:
+        #     print(f"[DELETE FAILED] {img_path}: {e}")
+    
+    def _validate_image(self, img_path):
+        """
+        Validate image integrity using PIL (catches truncated/corrupt JPEGs)
+        Returns: (is_valid, image_array or None, error_message)
+        """
+        try:
+            # First, try to fully load and verify with PIL
+            # This catches "Corrupt JPEG data: premature end of data segment"
+            with Image.open(img_path) as pil_img:
+                pil_img.load()  # Force full decode - this triggers errors for corrupt images
+                
+                # Convert to RGB if needed
+                if pil_img.mode != 'RGB':
+                    pil_img = pil_img.convert('RGB')
+                
+                # Convert to numpy array (RGB format)
+                image = np.array(pil_img)
+                
+                # Sanity check: image should have 3 channels and reasonable size
+                if image is None or len(image.shape) != 3 or image.shape[2] != 3:
+                    return False, None, "Invalid image dimensions"
+                
+                if image.shape[0] < 10 or image.shape[1] < 10:
+                    return False, None, "Image too small"
+                
+                return True, image, None
+                
+        except Exception as e:
+            return False, None, str(e)
+    
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
         
-        # Read image
-        image = cv2.imread(img_path)
+        # Validate and load image using PIL (more robust for corrupt detection)
+        is_valid, image, error_msg = self._validate_image(img_path)
         
-        if image is None:
-            print(f"[READ FAILED] Cannot find or read image: {img_path}")
-            raise ValueError(f"Image not found at {img_path}")
+        if not is_valid:
+            self._log_corrupt_file(img_path, error_msg or "Unknown error")
+            # Try next image to avoid crashing the training
+            new_idx = (idx + 1) % len(self)
+            if new_idx == idx:  # Prevent infinite loop if only one sample
+                raise RuntimeError("All images appear to be corrupt")
+            return self.__getitem__(new_idx)
         
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image is already RGB from PIL, no need for cv2.cvtColor
         
         # Apply median filtering for denoising (as per paper)
         if self.config and self.config.get('preprocessing', {}).get('median_filter_kernel'):
             kernel_size = self.config['preprocessing']['median_filter_kernel']
-            image = cv2.medianBlur(image, kernel_size)
+            # Validate kernel size: must be odd integer >= 3
+            if isinstance(kernel_size, int) and kernel_size >= 3 and kernel_size % 2 == 1:
+                image = cv2.medianBlur(image, kernel_size)
+            else:
+                raise ValueError(f"median_filter_kernel must be an odd integer >= 3, got {kernel_size}")
         
         # Apply transformations
         if self.transform:
@@ -93,27 +167,45 @@ class HerbalDataset(Dataset):
 def get_train_transforms(config):
     """
     Training transforms with data augmentation
-    Based on paper: rotation, mirroring, random cropping
+    Based on paper: rotation, mirroring, random cropping, grayscale
     """
     img_size = config['data']['image_size']
     mean = config['preprocessing']['mean']
     std = config['preprocessing']['std']
+    use_grayscale = config['preprocessing'].get('use_grayscale', False)
     
-    return A.Compose([
+    transform_list = [
         A.Resize(img_size + 32, img_size + 32),
         A.RandomCrop(img_size, img_size),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.Rotate(limit=config['augmentation']['rotation_degrees'], p=0.5),
-        A.ColorJitter(
+    ]
+    
+    # Grayscale conversion (as per paper: weighted average method)
+    # Converts to grayscale but keeps 3 channels for pretrained model compatibility
+    # Formula: 0.299*R + 0.587*G + 0.114*B (same as paper's weighted average)
+    if use_grayscale:
+        # Albumentations' ToGray will convert RGB -> grayscale and keep the
+        # number of channels consistent for downstream transforms when input
+        # is RGB, so do not pass torchvision-specific args like
+        # `num_output_channels` which albumentations does not accept.
+        transform_list.append(A.ToGray(p=1.0))
+    else:
+        # Only apply color jitter if NOT using grayscale
+        transform_list.append(A.ColorJitter(
             brightness=config['augmentation']['color_jitter']['brightness'],
             contrast=config['augmentation']['color_jitter']['contrast'],
             saturation=config['augmentation']['color_jitter']['saturation'],
             p=0.3
-        ),
+        ))
+    
+    transform_list.extend([
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
+    
+    return A.Compose(transform_list)
 
 
 def get_val_transforms(config):
@@ -121,12 +213,22 @@ def get_val_transforms(config):
     img_size = config['data']['image_size']
     mean = config['preprocessing']['mean']
     std = config['preprocessing']['std']
+    use_grayscale = config['preprocessing'].get('use_grayscale', False)
     
-    return A.Compose([
+    transform_list = [
         A.Resize(img_size, img_size),
+    ]
+    
+    # Grayscale conversion (must match training transforms)
+    if use_grayscale:
+        transform_list.append(A.ToGray(p=1.0))
+    
+    transform_list.extend([
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
     ])
+    
+    return A.Compose(transform_list)
 
 
 def create_dataloaders(config):

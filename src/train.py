@@ -40,11 +40,19 @@ class Trainer:
         
         # Update num_classes in config
         config['data']['num_classes'] = len(self.class_to_idx)
+        print(f"[DEBUG] Number of classes detected: {config['data']['num_classes']}")
+        print(f"[DEBUG] Classes: {list(self.class_to_idx.keys())}")
         
         # Create model
         print(f"Creating model on {self.device}...")
         self.model = create_model(config)
         self.model = self.model.to(self.device)
+        
+        # Verify model output shape
+        with torch.no_grad():
+            dummy_input = torch.randn(1, 3, config['data']['image_size'], config['data']['image_size']).to(self.device)
+            dummy_output = self.model(dummy_input)
+            print(f"[DEBUG] Model output shape: {dummy_output.shape} (should be [1, {config['data']['num_classes']}])")
         
         # Loss function with label smoothing
         self.criterion = nn.CrossEntropyLoss(
@@ -177,7 +185,7 @@ class Trainer:
             
             # Forward pass
             if self.use_amp:
-                with autocast():
+                with autocast(device_type='cuda'):
                     outputs = self.model(images)
                     loss = self.criterion(outputs, labels)
             else:
@@ -204,6 +212,12 @@ class Trainer:
         print(f"\nStarting training for {self.config['training']['epochs']} epochs...")
         print(f"Training samples: {len(self.train_loader.dataset)}")
         print(f"Validation samples: {len(self.val_loader.dataset)}\n")
+        
+        # Debug: Check labels from first batch
+        images, labels = next(iter(self.train_loader))
+        print(f"[DEBUG] First batch labels: {labels}")
+        print(f"[DEBUG] Label range: min={labels.min().item()}, max={labels.max().item()}")
+        print(f"[DEBUG] Expected range: 0 to {self.config['data']['num_classes'] - 1}\n")
         
         for epoch in range(self.start_epoch, self.config['training']['epochs']):
             # Train

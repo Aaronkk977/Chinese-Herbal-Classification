@@ -169,8 +169,6 @@ python main.py --mode train --config ../configs/config.yaml
 # Use specific GPU (e.g., GPU 1)
 python main.py --mode train --config ../configs/config.yaml --gpu-id 1
 
-# Use GPU 2
-python main.py --mode train --config ../configs/config.yaml --gpu-id 2
 ```
 
 **First Time Setup:**
