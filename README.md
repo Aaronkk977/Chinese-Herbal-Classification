@@ -233,6 +233,7 @@ python main.py --mode evaluate \
     --split test
 ```
 
+
 ### Evaluation Metrics
 
 The evaluation script computes:
@@ -260,13 +261,13 @@ python main.py --mode inference \
 
 ## ⚙️ Configuration
 
-Edit `configs/config.yaml` to customize:
+Edit `configs/config.yaml` to customize. Example defaults (reflects repository `configs/config.yaml`):
 
 ```yaml
 data:
   image_size: 224
   num_classes: 100
-  batch_size: 32
+  num_workers: 2
 
 model:
   num_acmix_blocks: 2
@@ -275,6 +276,7 @@ model:
 
 training:
   epochs: 100
+  batch_size: 8
   learning_rate: 0.0002
   optimizer: "adamw"
   use_amp: true
@@ -312,13 +314,14 @@ The ACMix module combines:
 ### Data Preprocessing (as per paper)
 
 1. **Resize** to 224×224
-2. **Median Filtering** for denoising (kernel size: 5)
-3. **Normalization** with ImageNet statistics
-4. **Augmentation**:
-   - Random rotation (±30°)
-   - Horizontal/vertical flipping
-   - Random cropping
-   - Color jittering
+2. **Median Filtering** for denoising: optional (config key `preprocessing.median_filter_kernel` exists, default 5), but the dataset loader leaves median filtering disabled by default.
+3. **Normalization** with ImageNet statistics (`preprocessing.mean` / `preprocessing.std`).
+4. **Augmentation (implemented in code)**:
+  - `RandomResizedCrop` to 224×224 with `scale=(0.6, 1.0)` (uses Albumentations `RandomResizedCrop`)
+  - Random horizontal flip (`A.HorizontalFlip(p=0.5)`) — vertical flip is present in `configs/config.yaml` but is not applied in the current transform pipeline.
+  - Random rotation: ±20° (`A.Rotate(limit=20)`)
+  - Color jitter: brightness/contrast/saturation = 0.2 (`A.ColorJitter(...)`)
+  - Optional grayscale conversion supported via `preprocessing.use_grayscale` (default: `false`)
 
 ### Key Techniques
 
@@ -339,6 +342,21 @@ Based on the research paper:
 | Test Accuracy | ~80.5% |
 
 *Note: Results may vary based on dataset and hyperparameters*
+
+---
+
+Recent evaluation (example run included with this repository):
+
+- **Test accuracy:** 0.8619 (86.19%)
+- **Samples evaluated (support):** 2998
+- **Macro / weighted avg (F1)**: ≈ 0.8617
+
+Full per-class report and evaluation artifacts are saved under `results/`:
+
+- `results/test_classification_report.txt` — per-class precision/recall/f1 and overall summary
+- `results/test_confusion_matrix.png` — confusion matrix heatmap (if generated)
+
+Use these files to inspect class-wise performance and failure modes.
 
 ## 🔬 Research Background
 
