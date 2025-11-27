@@ -47,7 +47,8 @@ print(f"  Val images: {val_images}")
 
 # Create organized dataset structure
 print("\n[3/4] Creating organized dataset structure...")
-data_root = Path("data/herbal")
+# Use top-level `data/` so other scripts (splitter, dataset loader) find `train/` and `val/`
+data_root = Path("data")
 data_root.mkdir(parents=True, exist_ok=True)
 
 # Create train/val/test directories
