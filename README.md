@@ -347,7 +347,7 @@ Based on the research paper:
 
 Recent evaluation (example run included with this repository):
  - **Train accuracy:** 0.9940 (99.40%)
- - **Validation accuracy:** 0.0.8555 (85.55%)
+ - **Validation accuracy:** 0.8555 (85.55%)
  - **Test accuracy:** 0.8612 (86.12%)
  - **Samples evaluated (support):** 2998
  - **Macro / weighted avg (F1)**: ≈ 0.8616
