@@ -37,7 +37,7 @@ Chinese-Herbal-Classification/
 ├── checkpoints/                # Model checkpoints
 ├── results/                    # Evaluation results
 ├── logs/                       # TensorBoard logs
-├── download_data.py            # Dataset download script
+├── scripts/download_data.py   # Dataset download script
 ├── requirements.txt            # Python dependencies
 └── README.md                   # This file
 ```
@@ -64,7 +64,7 @@ conda activate herbal
 Option 1 - Use automated setup script (recommended):
 
 ```bash
-bash setup.sh
+bash scripts/setup.sh
 ```
 
 Option 2 - Manual installation:
@@ -111,7 +111,7 @@ kaggle datasets download -d mumubushimo/herbaldata -p data --unzip
 - Option B — Use the included downloader script (may wrap direct HTTP links or other sources):
 
 ```bash
-python download_data.py
+python scripts/download_data.py
 ```
 
 After download/extraction you should see the source layout:
@@ -123,7 +123,7 @@ After download/extraction you should see the source layout:
 Run the provided splitter which performs the two-step process (copy val -> test, split train -> train/val):
 
 ```bash
-python split_dataset.py --source data --output data_split
+python scripts/split_dataset.py --source data --output data_split
 ```
 
 Key details:
@@ -137,10 +137,10 @@ Examples:
 
 ```bash
 # Default behavior: copy original val -> test, split original train into train+val (val_ratio=0.2)
-python split_dataset.py --source data --output data_split
+python scripts/split_dataset.py --source data --output data_split
 
 # Change validation ratio (per-class):
-python split_dataset.py --source data --output data_split --val-ratio 0.15 --seed 123
+python scripts/split_dataset.py --source data --output data_split --val-ratio 0.15 --seed 123
 ```
 
 Notes and caveats:
@@ -150,7 +150,7 @@ Notes and caveats:
 
 #### Step 3: Fix Corrupt / Problematic Images (if any)
 
-If Pillow reports decoding errors (e.g. "broken data stream"), use `fix_images.py` to try repairing problematic files. The script:
+If Pillow reports decoding errors (e.g. "broken data stream"), use `fix_images.py` (in `scripts/`) to try repairing problematic files. The script:
 
 - Attempts to `Image.open(...).load()` each file and will try conversions for palette/alpha images.
 - Backs up repaired originals to `backup_fixed_images/` and moves irreparable files to `corrupt_images/`.
@@ -160,10 +160,10 @@ Usage examples:
 
 ```bash
 # Attempt to fix files listed in corrupt_images.log
-python fix_images.py --from-log corrupt_images.log
+python scripts/fix_images.py --from-log corrupt_images.log
 
 # Or scan and try to fix every image under data_split/
-python fix_images.py --root data_split
+python scripts/fix_images.py --root data_split
 ```
 
 After running the fixer, re-run the dataset check or start training. The project `.gitignore` excludes `backup_fixed_images/`, `corrupt_images/`, and `corrupt_images.log`.
@@ -191,9 +191,9 @@ python main.py --mode train --config ../configs/config.yaml --gpu-id 1
 **First Time Setup:**
 
 Before training, ensure you have:
-1. ✅ Installed all dependencies (`bash setup.sh` or `pip install -r requirements.txt`)
-2. ✅ Downloaded the dataset (`python download_data.py`)
-3. ✅ **Split the dataset** (`python split_dataset.py --source data --output data_split`)
+1. ✅ Installed all dependencies (`bash scripts/setup.sh` or `pip install -r requirements.txt`)
+2. ✅ Downloaded the dataset (`python scripts/download_data.py`)
+3. ✅ **Split the dataset** (`python scripts/split_dataset.py --source data --output data_split`)
 4. ✅ Activated the conda environment (`conda activate herbal`)
 
 The training script will automatically create necessary directories:
