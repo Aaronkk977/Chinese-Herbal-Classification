@@ -70,9 +70,10 @@ class ACMix(nn.Module):
             bias=False
         )
         
-        # Position encoding for self-attention
+        # Spatial position encoding for self-attention
+        # Use a larger spatial size and interpolate at runtime for flexibility
         self.pos_encoding = nn.Parameter(
-            torch.randn(1, out_channels, 1, 1)
+            torch.randn(1, out_channels, 56, 56) * 0.02  # Small init
         )
         
         # Attention dropout
@@ -101,13 +102,20 @@ class ACMix(nn.Module):
         qkv = qkv.permute(1, 0, 2, 4, 3)  # [3, B, num_heads, H*W, head_dim]
         q, k, v = qkv[0], qkv[1], qkv[2]
         
-        # Self-Attention branch
-        attn = (q @ k.transpose(-2, -1)) * (self.head_dim ** -0.5)
+        # Self-Attention branch with numerical stability
+        scale = self.head_dim ** -0.5
+        attn = (q @ k.transpose(-2, -1)) * scale
+        # Clamp attention scores to prevent overflow in softmax
+        attn = torch.clamp(attn, min=-50.0, max=50.0)
         attn = F.softmax(attn, dim=-1)
+        # Replace any NaN with 0 (defensive)
+        attn = torch.nan_to_num(attn, nan=0.0)
         attn = self.attn_drop(attn)
         
         attn_out = (attn @ v).transpose(2, 3).reshape(B, self.out_channels, H, W)
-        attn_out = attn_out + self.pos_encoding
+        # Interpolate positional encoding to match feature map size
+        pos_enc = F.interpolate(self.pos_encoding, size=(H, W), mode='bilinear', align_corners=False)
+        attn_out = attn_out + pos_enc
         
         # Convolution branch
         conv_out = self.conv(x)

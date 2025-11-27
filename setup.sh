@@ -37,19 +37,13 @@ fi
 echo ""
 echo "Step 2: Installing packages into 'herbal' environment using 'conda run'..."
 
-echo "Installing PyTorch with CUDA support..."
-"$CONDA_CMD" run -n herbal pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+echo "Installing packages from requirements.txt (this installs torch from PyPI by default)..."
+"$CONDA_CMD" run -n herbal pip install -r requirements.txt
 
-echo "Installing core dependencies..."
-"$CONDA_CMD" run -n herbal pip install timm scikit-learn pandas pyyaml tqdm
+echo "Note: If you need a specific CUDA build of PyTorch, install it manually, e.g."
+echo "  conda run -n herbal pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124"
 
-echo "Installing data augmentation and visualization tools..."
-"$CONDA_CMD" run -n herbal pip install albumentations opencv-python matplotlib seaborn
-
-echo "Installing TensorBoard..."
-"$CONDA_CMD" run -n herbal pip install tensorboard
-
-echo "Installing additional packages..."
+echo "Installing additional/optional packages..."
 "$CONDA_CMD" run -n herbal pip install kagglehub || true
 
 echo ""

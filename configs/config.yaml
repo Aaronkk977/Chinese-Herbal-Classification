@@ -5,9 +5,8 @@ data:
   dataset_path: "data_split"  # Path to properly split dataset (train/val/test)
   image_size: 224
   num_classes: 100  # Will be auto-detected from dataset
-  train_split: 0.7
+  train_split: 0.8
   val_split: 0.2
-  test_split: 0.1
   num_workers: 2
 
 preprocessing:
@@ -45,12 +44,13 @@ model:
 training:
   epochs: 100
   batch_size: 8
-  learning_rate: 0.001 # original: 0.0002
+  learning_rate: 0.0002  # As per paper (0.001 causes NaN)
   optimizer: "adamw"
   weight_decay: 0.05
   scheduler: "cosine"
   warmup_epochs: 5
   label_smoothing: 0.1
+  gradient_clip: 1.0  # Gradient clipping to prevent exploding gradients
   
   # Mixed precision training
   use_amp: true
@@ -61,10 +61,10 @@ training:
 
 hardware:
   device: "cuda"  # Always use GPU
-  gpu_id: 5       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
+  gpu_id: 1       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
   seed: 42
 
 paths:
-  checkpoint_dir: "checkpoints"
-  results_dir: "results"
-  log_dir: "logs"
+  checkpoint_dir: "../checkpoints"
+  results_dir: "../results"
+  log_dir: "../logs"

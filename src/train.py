@@ -104,11 +104,15 @@ class Trainer:
         return optimizer
     
     def _create_scheduler(self):
-        """Create learning rate scheduler"""
+        """Create learning rate scheduler with warmup"""
+        warmup_epochs = self.config['training'].get('warmup_epochs', 0)
+        total_epochs = self.config['training']['epochs']
+        
         if self.config['training']['scheduler'].lower() == 'cosine':
+            # Use CosineAnnealingLR; we'll handle warmup manually in train loop
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=self.config['training']['epochs'],
+                T_max=total_epochs - warmup_epochs,
                 eta_min=1e-6
             )
         elif self.config['training']['scheduler'].lower() == 'step':
@@ -121,6 +125,15 @@ class Trainer:
             scheduler = None
         
         return scheduler
+    
+    def _get_warmup_lr(self, epoch):
+        """Get learning rate during warmup period"""
+        warmup_epochs = self.config['training'].get('warmup_epochs', 0)
+        base_lr = self.config['training']['learning_rate']
+        if warmup_epochs > 0 and epoch < warmup_epochs:
+            # Linear warmup
+            return base_lr * (epoch + 1) / warmup_epochs
+        return None  # Use scheduler LR
     
     def train_epoch(self, epoch):
         """Train for one epoch"""
@@ -142,7 +155,12 @@ class Trainer:
                     # Check outputs for NaN/Inf before computing loss
                     if torch.isnan(outputs).any() or torch.isinf(outputs).any():
                         print(f"[ERROR] NaN/Inf detected in model outputs at batch {batch_idx}")
-                        print(f"outputs min/max: {torch.nanmin(outputs).item() if not torch.isnan(outputs).all() else 'nan'}, {torch.nanmax(outputs).item() if not torch.isnan(outputs).all() else 'nan'}")
+                        # Use masked min/max for compatibility with older PyTorch versions
+                        valid_mask = ~(torch.isnan(outputs) | torch.isinf(outputs))
+                        if valid_mask.any():
+                            print(f"outputs min/max: {outputs[valid_mask].min().item()}, {outputs[valid_mask].max().item()}")
+                        else:
+                            print("outputs min/max: all values are NaN/Inf")
                         # Skip this batch to avoid crashing; alternatively raise to stop
                         continue
                     loss = self.criterion(outputs, labels)
@@ -150,17 +168,15 @@ class Trainer:
                 # Backward pass
                 self.optimizer.zero_grad()
                 self.scaler.scale(loss).backward()
-                # After backward, check gradients for NaN/Inf
-                grads_have_nan = False
-                for p in self.model.parameters():
-                    if p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any()):
-                        grads_have_nan = True
-                        break
-                if grads_have_nan:
-                    print(f"[ERROR] NaN/Inf detected in gradients at batch {batch_idx}; skipping optimizer step")
-                    self.optimizer.zero_grad()
-                    self.scaler.update()
-                    continue
+                
+                # Unscale gradients for inspection and clipping
+                self.scaler.unscale_(self.optimizer)
+                
+                # Gradient clipping to prevent exploding gradients
+                max_norm = self.config['training'].get('gradient_clip', 1.0)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=max_norm)
+                
+                # Step optimizer (scaler will skip if grads have inf/nan)
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
@@ -253,14 +269,22 @@ class Trainer:
         print(f"[DEBUG] Image tensor dtype: {img_dtype}, min: {img_min}, max: {img_max}\n")
         
         for epoch in range(self.start_epoch, self.config['training']['epochs']):
+            # Apply warmup learning rate if in warmup period
+            warmup_lr = self._get_warmup_lr(epoch)
+            if warmup_lr is not None:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = warmup_lr
+                print(f"[Warmup] Epoch {epoch}: lr={warmup_lr:.6f}")
+            
             # Train
             train_loss, train_acc = self.train_epoch(epoch)
             
             # Validate
             val_loss, val_acc = self.validate(epoch)
             
-            # Update learning rate
-            if self.scheduler is not None:
+            # Update learning rate (only after warmup)
+            warmup_epochs = self.config['training'].get('warmup_epochs', 0)
+            if self.scheduler is not None and epoch >= warmup_epochs:
                 self.scheduler.step()
             
             # Log to tensorboard

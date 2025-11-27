@@ -86,70 +86,87 @@ pip install -r requirements.txt
 
 ### Dataset Preparation
 
-**Important:** For proper academic evaluation following the paper's methodology, the dataset must be split into train/val/test sets.
+**Important:** The repository includes a small helper `split_dataset.py` that implements the project's current splitting procedure. The script follows a conservative, reproducible approach:
+
+- The original `data/val/` directory is copied wholesale to the final `test/` split (held-out test set).
+- The original `data/train/` directory is split per-class into `train/` and `val/` according to `--val-ratio` (default 0.2).
+
+This means the final proportions depend on the sizes of the original `train/` and `val/` folders: `test` = all images from original `data/val/`; `val` = a fraction of original `data/train/` controlled by `--val-ratio`; `train` = the remainder of original `data/train/`.
 
 #### Step 1: Download Dataset
 
-Download the Chinese herbal medicine dataset from Kaggle:
+The dataset used for this project is available on Kaggle:
+
+https://www.kaggle.com/datasets/mumubushimo/herbaldata/data
+
+There are two convenient ways to obtain the data:
+
+- Option A — Kaggle CLI (recommended if you have the `kaggle` tool configured):
+
+```bash
+# requires `kaggle` CLI and authentication via ~/.kaggle/kaggle.json
+kaggle datasets download -d mumubushimo/herbaldata -p data --unzip
+```
+
+- Option B — Use the included downloader script (may wrap direct HTTP links or other sources):
 
 ```bash
 python download_data.py
 ```
 
-This will download and extract the dataset to:
-- `data/train/` - Original training images
-- `data/val/` - Original validation images
-- 100 classes of Chinese herbs
-- Approximately 100+ images per class
+After download/extraction you should see the source layout:
+- `data/train/` - Original training images (class subfolders)
+- `data/val/` - Original validation images (class subfolders)
 
-#### Step 2: Split Dataset (REQUIRED for proper evaluation)
+#### Step 2: Split Dataset (current behavior)
 
-To avoid data leakage and follow academic standards, re-split the dataset into proper train/val/test sets (70%/20%/10%):
+Run the provided splitter which performs the two-step process (copy val -> test, split train -> train/val):
 
 ```bash
 python split_dataset.py --source data --output data_split
 ```
 
-This will:
-- ✅ Merge all images from `data/train/` and `data/val/`
-- ✅ Randomly shuffle all images
-- ✅ Split into 70% train / 20% val / 10% test
-- ✅ Create new directory structure in `data_split/`
+Key details:
+- `--val-ratio` (default `0.2`) controls the fraction of each class in `data/train/` that becomes the new `val/` set. The script computes `n_val = int(n_images * val_ratio)` per class and takes the first `n_val` images after a per-class shuffle.
+- The script shuffles images per class using `--seed` (default `42`) for reproducibility.
+- The `test/` split is an exact copy of the original `data/val/` folder and is intended as a final hold-out set (do not touch during training/selection).
+- Only files with extensions `.jpg`, `.jpeg`, `.png` are considered.
+- The script copies files (it does not move them). Filenames are preserved.
 
-**Why this is important:**
-- **Train set (70%)**: Used for model training
-- **Val set (20%)**: Used for hyperparameter tuning and model selection during training
-- **Test set (10%)**: **Completely untouched** until final evaluation - prevents data leakage
-
-#### Step 3: Dataset Structure After Splitting
-
-```
-data_split/
-├── train/          # Training set (70%)
-│   ├── Anxixiang/
-│   ├── Baibiandou/
-│   ├── ...
-│   └── Zirantong/  # 100 herb classes
-├── val/            # Validation set (20%)
-│   ├── Anxixiang/
-│   └── ...
-└── test/           # Test set (10%) - DO NOT TOUCH until final evaluation
-    ├── Anxixiang/
-    └── ...
-```
-
-**Custom Split Ratios:**
+Examples:
 
 ```bash
-# Custom ratios (must sum to 1.0)
-python split_dataset.py --source data --output data_split \
-    --train-ratio 0.8 --val-ratio 0.15 --test-ratio 0.05
+# Default behavior: copy original val -> test, split original train into train+val (val_ratio=0.2)
+python split_dataset.py --source data --output data_split
 
-# Set random seed for reproducibility
-python split_dataset.py --source data --output data_split --seed 42
+# Change validation ratio (per-class):
+python split_dataset.py --source data --output data_split --val-ratio 0.15 --seed 123
 ```
 
-**Note:** Both `data/` and `data_split/` directories are git-ignored.
+Notes and caveats:
+- The global train/val/test percentages are determined by the original folder sizes; the script does not enforce a fixed 70/20/10 split across the entire dataset.
+- For classes with very few images `n_val` may be zero; the script prints a per-class summary so you can inspect counts.
+- If you need a different split strategy (e.g., fixed global ratios across all images), modify `split_dataset.py` or write a custom splitter.
+
+#### Step 3: Fix Corrupt / Problematic Images (if any)
+
+If Pillow reports decoding errors (e.g. "broken data stream"), use `fix_images.py` to try repairing problematic files. The script:
+
+- Attempts to `Image.open(...).load()` each file and will try conversions for palette/alpha images.
+- Backs up repaired originals to `backup_fixed_images/` and moves irreparable files to `corrupt_images/`.
+- Logs failures to `corrupt_images.log`.
+
+Usage examples:
+
+```bash
+# Attempt to fix files listed in corrupt_images.log
+python fix_images.py --from-log corrupt_images.log
+
+# Or scan and try to fix every image under data_split/
+python fix_images.py --root data_split
+```
+
+After running the fixer, re-run the dataset check or start training. The project `.gitignore` excludes `backup_fixed_images/`, `corrupt_images/`, and `corrupt_images.log`.
 
 ## 🎓 Training
 

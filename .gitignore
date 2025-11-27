@@ -72,3 +72,8 @@ Thumbs.db
 # Kaggle cache
 ~/.cache/kagglehub/
 /tmp2/*/kagglehub/
+
+# Local backups and repair artifacts (added by tooling)
+backup_fixed_images/
+corrupt_images/
+corrupt_images.log

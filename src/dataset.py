@@ -114,7 +114,16 @@ class HerbalDataset(Dataset):
                 pil_img.load()  # Force full decode - this triggers errors for corrupt images
                 
                 # Convert to RGB if needed
-                if pil_img.mode != 'RGB':
+                # Handle palette images with transparency properly to avoid PIL warning
+                if pil_img.mode == 'P' and 'transparency' in pil_img.info:
+                    # Convert palette with transparency to RGBA first, then to RGB
+                    pil_img = pil_img.convert('RGBA')
+                if pil_img.mode == 'RGBA':
+                    # Create white background and composite
+                    background = Image.new('RGB', pil_img.size, (255, 255, 255))
+                    background.paste(pil_img, mask=pil_img.split()[3])  # Use alpha as mask
+                    pil_img = background
+                elif pil_img.mode != 'RGB':
                     pil_img = pil_img.convert('RGB')
                 
                 # Convert to numpy array (RGB format)
@@ -133,29 +142,35 @@ class HerbalDataset(Dataset):
             return False, None, str(e)
     
     def __getitem__(self, idx):
-        img_path, label = self.samples[idx]
+        # Use while loop to avoid recursion depth issues with consecutive corrupt images
+        max_attempts = len(self.samples)
+        attempts = 0
+        original_idx = idx
         
-        # Validate and load image using PIL (more robust for corrupt detection)
-        is_valid, image, error_msg = self._validate_image(img_path)
-        
-        if not is_valid:
+        while attempts < max_attempts:
+            img_path, label = self.samples[idx]
+            
+            # Validate and load image using PIL (more robust for corrupt detection)
+            is_valid, image, error_msg = self._validate_image(img_path)
+            
+            if is_valid:
+                break  # Found a valid image
+            
             self._log_corrupt_file(img_path, error_msg or "Unknown error")
-            # Try next image to avoid crashing the training
-            new_idx = (idx + 1) % len(self)
-            if new_idx == idx:  # Prevent infinite loop if only one sample
-                raise RuntimeError("All images appear to be corrupt")
-            return self.__getitem__(new_idx)
+            idx = (idx + 1) % len(self)
+            attempts += 1
+        
+        if attempts >= max_attempts:
+            raise RuntimeError(f"All images appear to be corrupt (checked {max_attempts} images starting from idx {original_idx})")
         
         # image is already RGB from PIL, no need for cv2.cvtColor
         
-        # Apply median filtering for denoising (as per paper)
-        if self.config and self.config.get('preprocessing', {}).get('median_filter_kernel'):
-            kernel_size = self.config['preprocessing']['median_filter_kernel']
-            # Validate kernel size: must be odd integer >= 3
-            if isinstance(kernel_size, int) and kernel_size >= 3 and kernel_size % 2 == 1:
-                image = cv2.medianBlur(image, kernel_size)
-            else:
-                raise ValueError(f"median_filter_kernel must be an odd integer >= 3, got {kernel_size}")
+        # Note: Median filtering removed to match standard augmentation pipeline
+        # If needed, uncomment below:
+        # if self.config and self.config.get('preprocessing', {}).get('median_filter_kernel'):
+        #     kernel_size = self.config['preprocessing']['median_filter_kernel']
+        #     if isinstance(kernel_size, int) and kernel_size >= 3 and kernel_size % 2 == 1:
+        #         image = cv2.medianBlur(image, kernel_size)
         
         # Apply transformations
         if self.transform:
