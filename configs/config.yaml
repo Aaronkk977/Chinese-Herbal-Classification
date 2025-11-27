@@ -57,7 +57,7 @@ training:
   
   # Checkpointing
   save_freq: 10
-  early_stopping_patience: 15
+  early_stopping_patience: 10
 
 hardware:
   device: "cuda"  # Always use GPU
