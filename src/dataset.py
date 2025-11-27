@@ -167,39 +167,46 @@ class HerbalDataset(Dataset):
 def get_train_transforms(config):
     """
     Training transforms with data augmentation
-    Based on paper: rotation, mirroring, random cropping, grayscale
+    Matching the specified augmentation pipeline:
+    - RandomResizedCrop(224, scale=(0.6, 1.0))
+    - RandomHorizontalFlip
+    - RandomRotation(20)
+    - ColorJitter(0.2, 0.2, 0.2)
+    - Normalize (ImageNet stats)
     """
-    img_size = config['data']['image_size']
+    img_size = config['data']['image_size']  # 224
     mean = config['preprocessing']['mean']
     std = config['preprocessing']['std']
     use_grayscale = config['preprocessing'].get('use_grayscale', False)
     
     transform_list = [
-        A.Resize(img_size + 32, img_size + 32),
-        A.RandomCrop(img_size, img_size),
+        # RandomResizedCrop: scale=(0.6, 1.0), output size = img_size
+        # Use `size=(h, w)` to satisfy albumentations' pydantic schema validation
+        A.RandomResizedCrop(
+            size=(img_size, img_size),
+            scale=(0.6, 1.0),
+            ratio=(0.75, 1.333),
+            p=1.0
+        ),
+        # RandomHorizontalFlip
         A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
-        A.Rotate(limit=config['augmentation']['rotation_degrees'], p=0.5),
+        # RandomRotation(20) - limit=20 means [-20, +20] degrees
+        A.Rotate(limit=20, p=0.5, border_mode=cv2.BORDER_REFLECT_101),
+        # ColorJitter(0.2, 0.2, 0.2) - brightness, contrast, saturation
+        A.ColorJitter(
+            brightness=0.2,
+            contrast=0.2,
+            saturation=0.2,
+            hue=0.0,
+            p=0.5
+        ),
     ]
     
-    # Grayscale conversion (as per paper: weighted average method)
-    # Converts to grayscale but keeps 3 channels for pretrained model compatibility
-    # Formula: 0.299*R + 0.587*G + 0.114*B (same as paper's weighted average)
+    # Optional grayscale conversion (as per paper)
     if use_grayscale:
-        # Albumentations' ToGray will convert RGB -> grayscale and keep the
-        # number of channels consistent for downstream transforms when input
-        # is RGB, so do not pass torchvision-specific args like
-        # `num_output_channels` which albumentations does not accept.
         transform_list.append(A.ToGray(p=1.0))
-    else:
-        # Only apply color jitter if NOT using grayscale
-        transform_list.append(A.ColorJitter(
-            brightness=config['augmentation']['color_jitter']['brightness'],
-            contrast=config['augmentation']['color_jitter']['contrast'],
-            saturation=config['augmentation']['color_jitter']['saturation'],
-            p=0.3
-        ))
     
+    # Normalize with ImageNet stats + convert to tensor
     transform_list.extend([
         A.Normalize(mean=mean, std=std),
         ToTensorV2(),
@@ -209,8 +216,13 @@ def get_train_transforms(config):
 
 
 def get_val_transforms(config):
-    """Validation/Test transforms without augmentation"""
-    img_size = config['data']['image_size']
+    """
+    Validation/Test transforms without augmentation
+    Matching the specified pipeline:
+    - Resize(224, 224)
+    - Normalize (ImageNet stats)
+    """
+    img_size = config['data']['image_size']  # 224
     mean = config['preprocessing']['mean']
     std = config['preprocessing']['std']
     use_grayscale = config['preprocessing'].get('use_grayscale', False)
@@ -219,7 +231,7 @@ def get_val_transforms(config):
         A.Resize(img_size, img_size),
     ]
     
-    # Grayscale conversion (must match training transforms)
+    # Optional grayscale conversion (must match training if used)
     if use_grayscale:
         transform_list.append(A.ToGray(p=1.0))
     

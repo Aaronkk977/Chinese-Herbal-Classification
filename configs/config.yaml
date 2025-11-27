@@ -8,7 +8,7 @@ data:
   train_split: 0.7
   val_split: 0.2
   test_split: 0.1
-  num_workers: 0
+  num_workers: 2
 
 preprocessing:
   # Normalization (ImageNet statistics for pretrained models)
@@ -17,7 +17,7 @@ preprocessing:
   # Grayscale conversion (as per paper: weighted average method)
   # Helps reduce ad/watermark noise by focusing on texture instead of color
   # Output is still 3-channel (R=G=B) for pretrained model compatibility
-  use_grayscale: true
+  use_grayscale: false
   # Denoising with median filter (kernel must be odd integer >= 3)
   median_filter_kernel: 5
   
@@ -45,7 +45,7 @@ model:
 training:
   epochs: 100
   batch_size: 8
-  learning_rate: 0.0002
+  learning_rate: 0.001 # original: 0.0002
   optimizer: "adamw"
   weight_decay: 0.05
   scheduler: "cosine"
@@ -61,7 +61,7 @@ training:
 
 hardware:
   device: "cuda"  # Always use GPU
-  gpu_id: 2       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
+  gpu_id: 5       # GPU ID to use (0, 1, 2, etc.) (can override with --gpu-id)
   seed: 42
 
 paths:

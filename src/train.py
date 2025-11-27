@@ -67,7 +67,9 @@ class Trainer:
         
         # Mixed precision training
         self.use_amp = config['training'].get('use_amp', True)
-        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
+        # GradScaler() should not be passed a string; use default constructor
+        # which enables AMP when desired. Passing a non-bool can cause unexpected behavior.
+        self.scaler = GradScaler() if self.use_amp else None
         
         # Create directories
         os.makedirs(config['paths']['checkpoint_dir'], exist_ok=True)
@@ -137,15 +139,35 @@ class Trainer:
             if self.use_amp:
                 with autocast(device_type='cuda'):
                     outputs = self.model(images)
+                    # Check outputs for NaN/Inf before computing loss
+                    if torch.isnan(outputs).any() or torch.isinf(outputs).any():
+                        print(f"[ERROR] NaN/Inf detected in model outputs at batch {batch_idx}")
+                        print(f"outputs min/max: {torch.nanmin(outputs).item() if not torch.isnan(outputs).all() else 'nan'}, {torch.nanmax(outputs).item() if not torch.isnan(outputs).all() else 'nan'}")
+                        # Skip this batch to avoid crashing; alternatively raise to stop
+                        continue
                     loss = self.criterion(outputs, labels)
                 
                 # Backward pass
                 self.optimizer.zero_grad()
                 self.scaler.scale(loss).backward()
+                # After backward, check gradients for NaN/Inf
+                grads_have_nan = False
+                for p in self.model.parameters():
+                    if p.grad is not None and (torch.isnan(p.grad).any() or torch.isinf(p.grad).any()):
+                        grads_have_nan = True
+                        break
+                if grads_have_nan:
+                    print(f"[ERROR] NaN/Inf detected in gradients at batch {batch_idx}; skipping optimizer step")
+                    self.optimizer.zero_grad()
+                    self.scaler.update()
+                    continue
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
             else:
                 outputs = self.model(images)
+                if torch.isnan(outputs).any() or torch.isinf(outputs).any():
+                    print(f"[ERROR] NaN/Inf detected in model outputs at batch {batch_idx} (AMP disabled)")
+                    continue
                 loss = self.criterion(outputs, labels)
                 
                 self.optimizer.zero_grad()
@@ -213,11 +235,22 @@ class Trainer:
         print(f"Training samples: {len(self.train_loader.dataset)}")
         print(f"Validation samples: {len(self.val_loader.dataset)}\n")
         
-        # Debug: Check labels from first batch
+        # Debug: Check labels and image tensor statistics from first batch
         images, labels = next(iter(self.train_loader))
+        # images is a tensor from ToTensorV2 (CPU) with normalization applied
+        try:
+            img_max = images.max().item()
+            img_min = images.min().item()
+            img_dtype = images.dtype
+        except Exception:
+            img_max = None
+            img_min = None
+            img_dtype = None
+
         print(f"[DEBUG] First batch labels: {labels}")
         print(f"[DEBUG] Label range: min={labels.min().item()}, max={labels.max().item()}")
-        print(f"[DEBUG] Expected range: 0 to {self.config['data']['num_classes'] - 1}\n")
+        print(f"[DEBUG] Expected range: 0 to {self.config['data']['num_classes'] - 1}")
+        print(f"[DEBUG] Image tensor dtype: {img_dtype}, min: {img_min}, max: {img_max}\n")
         
         for epoch in range(self.start_epoch, self.config['training']['epochs']):
             # Train
