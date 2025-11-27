@@ -84,7 +84,7 @@ def main():
     parser.add_argument('--mode', type=str, required=True, 
                         choices=['train', 'evaluate', 'inference'],
                         help='Mode to run: train, evaluate, or inference')
-    parser.add_argument('--config', type=str, default='configs/config.yaml',
+    parser.add_argument('--config', type=str, default='../configs/config.yaml',
                         help='Path to configuration file')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='Path to model checkpoint (for evaluation/inference)')

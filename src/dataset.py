@@ -11,7 +11,7 @@ Based on paper specifications:
 import os
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
@@ -21,6 +21,9 @@ import warnings
 
 # Suppress PIL decompression bomb warning for large images
 warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
+
+# Allow loading truncated JPEG files (some images have broken data streams but are still usable)
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Global set to track already-logged corrupt files (avoid spamming logs)
 _logged_corrupt_files = set()
