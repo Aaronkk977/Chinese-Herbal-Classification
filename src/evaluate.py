@@ -209,6 +209,32 @@ class Evaluator:
         per_class_path = os.path.join(results_dir, f'{split_name}_per_class_metrics.csv')
         per_class_df.to_csv(per_class_path, index=False)
         print(f"Saved per-class metrics to {per_class_path}")
+
+        # Determine top-5 hardest and top-5 easiest classes by F1-score
+        try:
+            sorted_by_f1 = per_class_df.sort_values('F1-score')
+            top5_hardest = sorted_by_f1.head(5).reset_index(drop=True)
+            top5_easiest = sorted_by_f1.tail(5).iloc[::-1].reset_index(drop=True)
+
+            hardest_path = os.path.join(results_dir, f'{split_name}_top5_hardest.csv')
+            easiest_path = os.path.join(results_dir, f'{split_name}_top5_easiest.csv')
+
+            top5_hardest.to_csv(hardest_path, index=False)
+            top5_easiest.to_csv(easiest_path, index=False)
+
+            print(f"Saved top-5 hardest classes to {hardest_path}")
+            print(f"Saved top-5 easiest classes to {easiest_path}")
+
+            # Append top5 summary to metrics text file
+            with open(summary_path, 'a') as f:
+                f.write('\nTop-5 Hardest Classes (by F1-score):\n')
+                f.write(top5_hardest.to_string(index=False))
+                f.write('\n\nTop-5 Easiest Classes (by F1-score):\n')
+                f.write(top5_easiest.to_string(index=False))
+                f.write('\n')
+
+        except Exception as e:
+            print(f"Warning: failed to compute/save top-5 classes: {e}")
         
         # Save and plot confusion matrix
         self._plot_confusion_matrix(

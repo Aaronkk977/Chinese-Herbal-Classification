@@ -18,6 +18,7 @@ from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 from model import create_model
 from dataset import create_dataloaders
@@ -40,8 +41,6 @@ class Trainer:
         
         # Update num_classes in config
         config['data']['num_classes'] = len(self.class_to_idx)
-        print(f"[DEBUG] Number of classes detected: {config['data']['num_classes']}")
-        print(f"[DEBUG] Classes: {list(self.class_to_idx.keys())}")
         
         # Create model
         print(f"Creating model on {self.device}...")
@@ -52,7 +51,6 @@ class Trainer:
         with torch.no_grad():
             dummy_input = torch.randn(1, 3, config['data']['image_size'], config['data']['image_size']).to(self.device)
             dummy_output = self.model(dummy_input)
-            print(f"[DEBUG] Model output shape: {dummy_output.shape} (should be [1, {config['data']['num_classes']}])")
         
         # Loss function with label smoothing
         self.criterion = nn.CrossEntropyLoss(
@@ -82,6 +80,12 @@ class Trainer:
         self.start_epoch = 0
         self.best_acc = 0.0
         self.patience_counter = 0
+        
+        # History for plotting
+        self.train_acc_history = []
+        self.val_acc_history = []
+        self.train_loss_history = []
+        self.val_loss_history = []
     
     def _create_optimizer(self):
         """Create optimizer based on config"""
@@ -265,7 +269,6 @@ class Trainer:
 
         print(f"[DEBUG] First batch labels: {labels}")
         print(f"[DEBUG] Label range: min={labels.min().item()}, max={labels.max().item()}")
-        print(f"[DEBUG] Expected range: 0 to {self.config['data']['num_classes'] - 1}")
         print(f"[DEBUG] Image tensor dtype: {img_dtype}, min: {img_min}, max: {img_max}\n")
         
         for epoch in range(self.start_epoch, self.config['training']['epochs']):
@@ -281,6 +284,12 @@ class Trainer:
             
             # Validate
             val_loss, val_acc = self.validate(epoch)
+            
+            # Record history for plotting
+            self.train_acc_history.append(train_acc)
+            self.val_acc_history.append(val_acc)
+            self.train_loss_history.append(train_loss)
+            self.val_loss_history.append(val_loss)
             
             # Update learning rate (only after warmup)
             warmup_epochs = self.config['training'].get('warmup_epochs', 0)
@@ -328,6 +337,47 @@ class Trainer:
         
         print(f"\nTraining completed! Best validation accuracy: {self.best_acc:.4f}")
         self.writer.close()
+        
+        # Plot and save accuracy curves
+        self._plot_training_curves()
+    
+    def _plot_training_curves(self):
+        """Plot and save training/validation accuracy and loss curves"""
+        results_dir = self.config['paths'].get('results_dir', '../results')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        epochs = range(1, len(self.train_acc_history) + 1)
+        
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        
+        # Plot Accuracy
+        ax1.plot(epochs, self.train_acc_history, 'b-', label='Train Accuracy', linewidth=2)
+        ax1.plot(epochs, self.val_acc_history, 'r-', label='Val Accuracy', linewidth=2)
+        ax1.set_xlabel('Epoch', fontsize=12)
+        ax1.set_ylabel('Accuracy', fontsize=12)
+        ax1.set_title('Training and Validation Accuracy', fontsize=14)
+        ax1.legend(loc='lower right', fontsize=10)
+        ax1.grid(True, linestyle='--', alpha=0.7)
+        ax1.set_ylim([0, 1])
+        
+        # Plot Loss
+        ax2.plot(epochs, self.train_loss_history, 'b-', label='Train Loss', linewidth=2)
+        ax2.plot(epochs, self.val_loss_history, 'r-', label='Val Loss', linewidth=2)
+        ax2.set_xlabel('Epoch', fontsize=12)
+        ax2.set_ylabel('Loss', fontsize=12)
+        ax2.set_title('Training and Validation Loss', fontsize=14)
+        ax2.legend(loc='upper right', fontsize=10)
+        ax2.grid(True, linestyle='--', alpha=0.7)
+        
+        plt.tight_layout()
+        
+        # Save figure
+        save_path = os.path.join(results_dir, 'training_curves.png')
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Training curves saved to: {save_path}")
 
 
 def main():

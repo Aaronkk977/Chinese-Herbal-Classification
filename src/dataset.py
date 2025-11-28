@@ -342,7 +342,6 @@ if __name__ == "__main__":
     
     try:
         train_loader, val_loader, test_loader, class_to_idx = create_dataloaders(config)
-        print(f"Number of classes: {len(class_to_idx)}")
         print(f"Train batches: {len(train_loader)}")
         print(f"Val batches: {len(val_loader)}")
         print(f"Test batches: {len(test_loader)}")
