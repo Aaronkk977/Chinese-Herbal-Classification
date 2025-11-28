@@ -2,12 +2,10 @@
 # Based on parameters from the research paper
 
 data:
-  dataset_path: "data_split"  # Path to properly split dataset (train/val/test)
+  dataset_path: "data"  # Path to properly split dataset (train/val/test)
   image_size: 224
   num_classes: 100  # Will be auto-detected from dataset
-  train_split: 0.8
-  val_split: 0.2
-  num_workers: 2
+  num_workers: 4
 
 preprocessing:
   # Normalization (ImageNet statistics for pretrained models)
@@ -44,9 +42,9 @@ model:
 training:
   epochs: 100
   batch_size: 8
-  learning_rate: 0.0002  # As per paper (0.001 causes NaN)
+  learning_rate: 0.0001  # As per paper (0.001 causes NaN)
   optimizer: "adamw"
-  weight_decay: 0.05
+  weight_decay: 0.0001
   scheduler: "cosine"
   warmup_epochs: 5
   label_smoothing: 0.1
