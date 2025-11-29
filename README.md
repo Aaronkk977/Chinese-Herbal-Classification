@@ -233,6 +233,13 @@ python main.py --mode evaluate \
     --split test
 ```
 
+By default it enables Test-Time Augmentation (TTA) to improve prediction robustness. This implementation uses multi-scale (1.0x, 1.1x, 1.2x) and horizontal flips, averaging softmax probabilities across augmentations.
+
+You can disable it by adding
+```bash
+--mo-tta
+```
+at the end of command.
 
 ### Evaluation Metrics
 

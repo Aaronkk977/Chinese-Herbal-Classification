@@ -24,16 +24,16 @@ def train(config):
     trainer.train()
 
 
-def evaluate(config, checkpoint_path, split='test'):
-    """Run evaluation"""
+def evaluate(config, checkpoint_path, split='test', use_tta=True):
+    """Run evaluation (supports Test-Time Augmentation if use_tta=True)"""
     evaluator = Evaluator(config, checkpoint_path=checkpoint_path)
     
     if split == 'train':
-        metrics = evaluator.evaluate(evaluator.train_loader, 'train')
+        metrics = evaluator.evaluate(evaluator.train_loader, 'train', use_tta=use_tta)
     elif split == 'val':
-        metrics = evaluator.evaluate(evaluator.val_loader, 'val')
+        metrics = evaluator.evaluate(evaluator.val_loader, 'val', use_tta=use_tta)
     else:
-        metrics = evaluator.evaluate(evaluator.test_loader, 'test')
+        metrics = evaluator.evaluate(evaluator.test_loader, 'test', use_tta=use_tta)
     
     return metrics
 
@@ -97,6 +97,8 @@ def main():
                         help='Path to checkpoint to resume training')
     parser.add_argument('--gpu-id', type=int, default=None,
                         help='GPU ID to use (e.g., 0, 1, 2). Overrides config file.')
+    parser.add_argument('--no-tta', action='store_true',
+                        help='Disable Test-Time Augmentation during evaluation (enabled by default)')
     
     args = parser.parse_args()
     
@@ -119,7 +121,12 @@ def main():
     elif args.mode == 'evaluate':
         if args.checkpoint is None:
             raise ValueError("Checkpoint path is required for evaluation")
-        evaluate(config, args.checkpoint, args.split)
+        # By default use TTA for evaluation; allow disabling with --no-tta
+        use_tta = not args.no_tta
+        evaluate(config, args.checkpoint, args.split, use_tta=use_tta)
+        # If using the Evaluator directly, pass use_tta where supported
+        # Note: the evaluate() helper will call Evaluator.evaluate without TTA
+        # so if more control is needed, you can call Evaluator directly.
     
     elif args.mode == 'inference':
         if args.checkpoint is None:

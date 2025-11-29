@@ -11,6 +11,7 @@ import os
 import yaml
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -56,18 +57,30 @@ class Evaluator:
         
         self.model.eval()
         
+        # TTA (Test-Time Augmentation) settings
+        self.tta_scales = [1.0, 1.1, 1.2]  # Multi-scale factors
+        self.tta_hflip = True  # Enable horizontal flip
+        
         # Create results directory
         os.makedirs(config['paths']['results_dir'], exist_ok=True)
     
     @torch.no_grad()
-    def evaluate(self, data_loader, split_name='test'):
+    def evaluate(self, data_loader, split_name='test', use_tta=False):
         """
         Evaluate model on given data loader
+        
+        Args:
+            data_loader: DataLoader for evaluation
+            split_name: Name of the split ('train', 'val', 'test')
+            use_tta: Whether to use Test-Time Augmentation
         
         Returns:
             Dictionary containing all evaluation metrics
         """
-        print(f"\nEvaluating on {split_name} set...")
+        if use_tta:
+            print(f"\nEvaluating on {split_name} set with TTA (scales={self.tta_scales}, hflip={self.tta_hflip})...")
+        else:
+            print(f"\nEvaluating on {split_name} set...")
         
         all_labels = []
         all_predictions = []
@@ -77,13 +90,17 @@ class Evaluator:
             images = images.to(self.device)
             labels = labels.to(self.device)
             
-            # Forward pass
-            outputs = self.model(images)
-            probabilities = torch.softmax(outputs, dim=1)
+            if use_tta:
+                # TTA: average predictions over multiple augmentations
+                probabilities = self._tta_inference(images)
+            else:
+                # Standard inference
+                outputs = self.model(images)
+                probabilities = torch.softmax(outputs, dim=1)
             
             # Store results
             all_labels.extend(labels.cpu().numpy())
-            all_predictions.extend(outputs.argmax(dim=1).cpu().numpy())
+            all_predictions.extend(probabilities.argmax(dim=1).cpu().numpy())
             all_probabilities.extend(probabilities.cpu().numpy())
         
         all_labels = np.array(all_labels)
@@ -99,6 +116,53 @@ class Evaluator:
         )
         
         return metrics
+    
+    def _tta_inference(self, images):
+        """
+        Test-Time Augmentation inference
+        
+        Applies multi-scale and horizontal flip augmentations,
+        then averages the softmax probabilities.
+        
+        Args:
+            images: Input tensor of shape (B, C, H, W)
+        
+        Returns:
+            Averaged probabilities tensor of shape (B, num_classes)
+        """
+        B, C, H, W = images.shape
+        all_probs = []
+        
+        for scale in self.tta_scales:
+            # Multi-scale: resize if scale != 1.0
+            if scale != 1.0:
+                new_H = int(H * scale)
+                new_W = int(W * scale)
+                scaled_images = F.interpolate(
+                    images, size=(new_H, new_W), mode='bilinear', align_corners=False
+                )
+                # Center crop back to original size
+                start_h = (new_H - H) // 2
+                start_w = (new_W - W) // 2
+                scaled_images = scaled_images[:, :, start_h:start_h+H, start_w:start_w+W]
+            else:
+                scaled_images = images
+            
+            # Original orientation
+            outputs = self.model(scaled_images)
+            probs = torch.softmax(outputs, dim=1)
+            all_probs.append(probs)
+            
+            # Horizontal flip
+            if self.tta_hflip:
+                flipped_images = torch.flip(scaled_images, dims=[3])  # Flip along width
+                outputs_flip = self.model(flipped_images)
+                probs_flip = torch.softmax(outputs_flip, dim=1)
+                all_probs.append(probs_flip)
+        
+        # Average all probabilities
+        avg_probs = torch.stack(all_probs, dim=0).mean(dim=0)
+        return avg_probs
     
     def _calculate_metrics(self, labels, predictions, probabilities, split_name):
         """Calculate all evaluation metrics"""
@@ -300,6 +364,8 @@ def main():
     parser.add_argument('--checkpoint', type=str, required=True, help='Path to model checkpoint')
     parser.add_argument('--split', type=str, default='test', choices=['train', 'val', 'test'], 
                         help='Dataset split to evaluate')
+    parser.add_argument('--tta', action='store_true',
+                        help='Enable Test-Time Augmentation (multi-scale + horizontal flip)')
     
     args = parser.parse_args()
     
@@ -312,11 +378,11 @@ def main():
     
     # Evaluate
     if args.split == 'train':
-        metrics = evaluator.evaluate(evaluator.train_loader, 'train')
+        metrics = evaluator.evaluate(evaluator.train_loader, 'train', use_tta=args.tta)
     elif args.split == 'val':
-        metrics = evaluator.evaluate(evaluator.val_loader, 'val')
+        metrics = evaluator.evaluate(evaluator.val_loader, 'val', use_tta=args.tta)
     else:
-        metrics = evaluator.evaluate(evaluator.test_loader, 'test')
+        metrics = evaluator.evaluate(evaluator.test_loader, 'test', use_tta=args.tta)
 
 
 if __name__ == '__main__':

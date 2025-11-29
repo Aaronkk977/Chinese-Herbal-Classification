@@ -25,11 +25,6 @@ warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
 # Allow loading truncated JPEG files (some images have broken data streams but are still usable)
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Global set to track already-logged corrupt files (avoid spamming logs)
-_logged_corrupt_files = set()
-# Log file path for corrupt images
-_corrupt_log_path = None
-
 
 class HerbalDataset(Dataset):
     """Custom dataset for Chinese Herbal Medicine images"""
@@ -78,102 +73,22 @@ class HerbalDataset(Dataset):
     def __len__(self):
         return len(self.samples)
     
-    def _log_corrupt_file(self, img_path, reason):
-        """Log corrupt file path to a log file and optionally delete it"""
-        global _logged_corrupt_files, _corrupt_log_path
-        
-        if img_path in _logged_corrupt_files:
-            return  # Already logged
-        
-        _logged_corrupt_files.add(img_path)
-        
-        # Initialize log path if not set
-        if _corrupt_log_path is None:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            _corrupt_log_path = os.path.join(project_root, 'corrupt_images.log')
-        
-        # Log to file
-        with open(_corrupt_log_path, 'a') as f:
-            f.write(f"{img_path} | {reason}\n")
-        
-        print(f"[CORRUPT] {reason}: {img_path}")
-        
-        # Optional: uncomment below to auto-delete corrupt files
-        # try:
-        #     os.remove(img_path)
-        #     print(f"[DELETED] {img_path}")
-        # except Exception as e:
-        #     print(f"[DELETE FAILED] {img_path}: {e}")
-    
-    def _validate_image(self, img_path):
-        """
-        Validate image integrity using PIL (catches truncated/corrupt JPEGs)
-        Returns: (is_valid, image_array or None, error_message)
-        """
-        try:
-            # First, try to fully load and verify with PIL
-            # This catches "Corrupt JPEG data: premature end of data segment"
-            with Image.open(img_path) as pil_img:
-                pil_img.load()  # Force full decode - this triggers errors for corrupt images
-                
-                # Convert to RGB if needed
-                # Handle palette images with transparency properly to avoid PIL warning
-                if pil_img.mode == 'P' and 'transparency' in pil_img.info:
-                    # Convert palette with transparency to RGBA first, then to RGB
-                    pil_img = pil_img.convert('RGBA')
-                if pil_img.mode == 'RGBA':
-                    # Create white background and composite
-                    background = Image.new('RGB', pil_img.size, (255, 255, 255))
-                    background.paste(pil_img, mask=pil_img.split()[3])  # Use alpha as mask
-                    pil_img = background
-                elif pil_img.mode != 'RGB':
-                    pil_img = pil_img.convert('RGB')
-                
-                # Convert to numpy array (RGB format)
-                image = np.array(pil_img)
-                
-                # Sanity check: image should have 3 channels and reasonable size
-                if image is None or len(image.shape) != 3 or image.shape[2] != 3:
-                    return False, None, "Invalid image dimensions"
-                
-                if image.shape[0] < 10 or image.shape[1] < 10:
-                    return False, None, "Image too small"
-                
-                return True, image, None
-                
-        except Exception as e:
-            return False, None, str(e)
-    
     def __getitem__(self, idx):
-        # Use while loop to avoid recursion depth issues with consecutive corrupt images
-        max_attempts = len(self.samples)
-        attempts = 0
-        original_idx = idx
+        img_path, label = self.samples[idx]
         
-        while attempts < max_attempts:
-            img_path, label = self.samples[idx]
+        # Load image using PIL
+        with Image.open(img_path) as pil_img:
+            # Convert to RGB if needed
+            if pil_img.mode == 'P' and 'transparency' in pil_img.info:
+                pil_img = pil_img.convert('RGBA')
+            if pil_img.mode == 'RGBA':
+                background = Image.new('RGB', pil_img.size, (255, 255, 255))
+                background.paste(pil_img, mask=pil_img.split()[3])
+                pil_img = background
+            elif pil_img.mode != 'RGB':
+                pil_img = pil_img.convert('RGB')
             
-            # Validate and load image using PIL (more robust for corrupt detection)
-            is_valid, image, error_msg = self._validate_image(img_path)
-            
-            if is_valid:
-                break  # Found a valid image
-            
-            self._log_corrupt_file(img_path, error_msg or "Unknown error")
-            idx = (idx + 1) % len(self)
-            attempts += 1
-        
-        if attempts >= max_attempts:
-            raise RuntimeError(f"All images appear to be corrupt (checked {max_attempts} images starting from idx {original_idx})")
-        
-        # image is already RGB from PIL, no need for cv2.cvtColor
-        
-        # Note: Median filtering removed to match standard augmentation pipeline
-        # If needed, uncomment below:
-        # if self.config and self.config.get('preprocessing', {}).get('median_filter_kernel'):
-        #     kernel_size = self.config['preprocessing']['median_filter_kernel']
-        #     if isinstance(kernel_size, int) and kernel_size >= 3 and kernel_size % 2 == 1:
-        #         image = cv2.medianBlur(image, kernel_size)
+            image = np.array(pil_img)
         
         # Apply transformations
         if self.transform:
